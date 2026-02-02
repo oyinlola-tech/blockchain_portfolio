@@ -1,0 +1,276 @@
+<!DOCTYPE html><html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Telente</title>
+    <link rel="stylesheet" href="../public/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header class="page-header">
+            <div class="header-left">
+                <h1 class="logo">Telente</h1>
+            </div>
+            <div class="header-right">
+                <button class="icon-btn" id="notificationsBtn">
+                    <i class="fas fa-bell"></i>
+                    <span class="badge hidden" id="notificationBadge">0</span>
+                </button>
+                <button class="icon-btn" id="addCoinBtn">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <div class="user-menu">
+                    <button class="avatar-btn" id="userMenuBtn">
+                        <i class="fas fa-user-circle"></i>
+                    </button>
+                    <div class="dropdown-menu hidden" id="userDropdown">
+                        <a href="#" id="profileLink">Profile</a>
+                        <a href="settings.html">Settings</a>
+                        <hr>
+                        <a href="#" id="logoutBtn">Logout</a>
+                    </div>
+                </div>
+            </div>
+        </header>
+    <main class="dashboard-main">
+        <!-- Portfolio Summary -->
+        <section class="portfolio-summary">
+            <div class="summary-header">
+                <h2>Portfolio</h2>
+                <div class="time-range">
+                    <button class="time-btn active" data-range="1d">1D</button>
+                    <button class="time-btn" data-range="7d">7D</button>
+                    <button class="time-btn" data-range="30d">30D</button>
+                    <button class="time-btn" data-range="1y">1Y</button>
+                </div>
+            </div>
+            
+            <div class="summary-cards">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Total Value</h3>
+                        <i class="fas fa-wallet"></i>
+                    </div>
+                    <div class="card-body">
+                        <div class="metric-value" id="totalValue">$0.00</div>
+                        <div class="metric-change positive hidden" id="totalChange">
+                            <i class="fas fa-arrow-up"></i>
+                            <span>0.00%</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h3>24h Change</h3>
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="card-body">
+                        <div class="metric-value" id="dailyChange">$0.00</div>
+                        <div class="metric-change negative hidden" id="dailyChangePercent">
+                            <i class="fas fa-arrow-down"></i>
+                            <span>0.00%</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Coins Held</h3>
+                        <i class="fas fa-coins"></i>
+                    </div>
+                    <div class="card-body">
+                        <div class="metric-value" id="coinsCount">0</div>
+                        <div class="metric-label">Different assets</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Performance Chart -->
+        <section class="chart-section">
+            <div class="section-header">
+                <h2>Performance</h2>
+                <div class="chart-controls">
+                    <select id="chartRange" class="select-control">
+                        <option value="3d">3 Days</option>
+                        <option value="7d">7 Days</option>
+                        <option value="30d">30 Days</option>
+                        <option value="90d">90 Days</option>
+                    </select>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="performanceChart"></canvas>
+                <div class="chart-loading" id="chartLoading">
+                    <div class="spinner"></div>
+                    <p>Loading chart data...</p>
+                </div>
+                <div class="chart-error hidden" id="chartError">
+                    <i class="fas fa-chart-line"></i>
+                    <p>Failed to load chart data</p>
+                    <button class="btn btn-outline btn-sm" id="retryChart">Retry</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Portfolio Holdings -->
+        <section class="holdings-section">
+            <div class="section-header">
+                <h2>Your Holdings</h2>
+                <button class="btn btn-outline btn-sm" id="addHoldingBtn">
+                    <i class="fas fa-plus"></i>
+                    Add Coin
+                </button>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Asset</th>
+                            <th>Price</th>
+                            <th>24h</th>
+                            <th>Holdings</th>
+                            <th>Value</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="holdingsTableBody">
+                        <!-- Holdings will be populated by JavaScript -->
+                        <tr class="table-loading">
+                            <td colspan="6">
+                                <div class="loading-row">
+                                    <div class="spinner"></div>
+                                    <span>Loading holdings...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="empty-state hidden" id="emptyHoldings">
+                <i class="fas fa-coins"></i>
+                <h3>No holdings yet</h3>
+                <p>Add your first cryptocurrency to start tracking</p>
+                <button class="btn btn-primary" id="addFirstCoinBtn">
+                    <i class="fas fa-plus"></i>
+                    Add First Coin
+                </button>
+            </div>
+        </section>
+
+        <!-- Recent Activity -->
+        <section class="activity-section">
+            <div class="section-header">
+                <h2>Recent Activity</h2>
+                <a href="#" class="text-link" id="viewAllActivity">View All</a>
+            </div>
+            
+            <div class="activity-list" id="activityList">
+                <!-- Activity items will be populated by JavaScript -->
+                <div class="activity-loading">
+                    <div class="spinner"></div>
+                    <span>Loading activity...</span>
+                </div>
+            </div>
+            
+            <div class="empty-state hidden" id="emptyActivity">
+                <i class="fas fa-history"></i>
+                <h3>No activity yet</h3>
+                <p>Your portfolio activity will appear here</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- Add Coin Modal -->
+    <div class="modal-overlay hidden" id="addCoinModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Add Coin to Portfolio</h3>
+                <button class="icon-btn close-modal" id="closeAddCoinModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="addCoinForm">
+                    <div class="form-group">
+                        <label for="coinSearch">Search Coin</label>
+                        <div class="search-container">
+                            <input type="text" id="coinSearch" placeholder="Search by name or symbol...">
+                            <div class="search-results hidden" id="coinSearchResults"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="selected-coin hidden" id="selectedCoinInfo">
+                        <div class="coin-preview">
+                            <img src="" alt="" class="coin-icon" id="selectedCoinIcon">
+                            <div class="coin-details">
+                                <h4 id="selectedCoinName"></h4>
+                                <span class="coin-symbol" id="selectedCoinSymbol"></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group hidden" id="amountGroup">
+                        <label for="coinAmount">Amount</label>
+                        <input type="number" id="coinAmount" step="0.00000001" min="0" placeholder="0.00">
+                        <div class="input-hint">
+                            Current price: <span id="currentPrice">$0.00</span>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group hidden" id="purchasePriceGroup">
+                        <label for="purchasePrice">Purchase Price (optional)</label>
+                        <input type="number" id="purchasePrice" step="0.01" min="0" placeholder="Leave empty for current price">
+                    </div>
+                    
+                    <div class="form-group hidden" id="dateGroup">
+                        <label for="purchaseDate">Purchase Date (optional)</label>
+                        <input type="date" id="purchaseDate">
+                    </div>
+                    
+                    <div id="addCoinError" class="error-message hidden"></div>
+                    
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-outline close-modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="confirmAddCoin" disabled>
+                            <span class="btn-text">Add to Portfolio</span>
+                            <div class="btn-loading hidden">
+                                <div class="spinner"></div>
+                            </div>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <a href="dashboard.html" class="nav-item active">
+            <i class="fas fa-chart-line"></i>
+            <span>Dashboard</span>
+        </a>
+        <a href="trending.html" class="nav-item">
+            <i class="fas fa-fire"></i>
+            <span>Trending</span>
+        </a>
+        <a href="#" class="nav-item" id="searchNavBtn">
+            <i class="fas fa-search"></i>
+            <span>Search</span>
+        </a>
+        <a href="settings.html" class="nav-item">
+            <i class="fas fa-cog"></i>
+            <span>Settings</span>
+        </a>
+    </nav>
+</div>
+
+<script src="../public/app.js" type="module"></script>
+
+
+</body>
+</html>
