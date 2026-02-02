@@ -1,0 +1,152 @@
+<!DOCTYPE html><html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trending - Telente</title>
+    <link rel="stylesheet" href="../public/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header class="page-header">
+            <div class="header-left">
+                <h1 class="logo">Telente</h1>
+            </div>
+            <div class="header-right">
+                <button class="icon-btn" id="refreshBtn">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+        </header> 
+    <main class="trending-main">
+        <!-- Market Overview -->
+        <section class="market-overview">
+            <div class="overview-cards">
+                <div class="overview-card">
+                    <div class="overview-icon">
+                        <i class="fas fa-globe"></i>
+                    </div>
+                    <div class="overview-content">
+                        <h3>Total Market Cap</h3>
+                        <div class="overview-value" id="totalMarketCap">$--</div>
+                        <div class="overview-change" id="marketCapChange">
+                            <span>0.00%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="overview-card">
+                    <div class="overview-icon">
+                        <i class="fas fa-exchange-alt"></i>
+                    </div>
+                    <div class="overview-content">
+                        <h3>24h Volume</h3>
+                        <div class="overview-value" id="totalVolume">$--</div>
+                        <div class="overview-subtext">Across all markets</div>
+                    </div>
+                </div>
+                <div class="overview-card">
+                    <div class="overview-icon">
+                        <i class="fas fa-chart-pie"></i>
+                    </div>
+                    <div class="overview-content">
+                        <h3>BTC Dominance</h3>
+                        <div class="overview-value" id="btcDominance">--%</div>
+                        <div class="overview-subtext">Bitcoin market share</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Trending Table -->
+        <section class="trending-table-section">
+            <div class="section-header">
+                <h2>Trending Coins</h2>
+                <div class="table-controls">
+                    <div class="search-container">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="trendingSearch" placeholder="Search coins...">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Coin</th>
+                            <th>Price</th>
+                            <th>24h</th>
+                            <th>Market Cap</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trendingTableBody">
+                        <tr class="table-loading">
+                            <td colspan="6">
+                                <div class="loading-row">
+                                    <div class="spinner"></div>
+                                    <span>Loading trending coins...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="table-footer">
+                <div class="table-info">
+                    Showing <span id="visibleCount">0</span> coins
+                </div>
+            </div>
+        </section>
+
+        <!-- Gainers & Losers -->
+        <section class="gainers-losers-section">
+            <div class="gl-tabs">
+                <button class="gl-tab active" id="topGainersTab">Top Gainers</button>
+                <button class="gl-tab" id="topLosersTab">Top Losers</button>
+            </div>
+            
+            <div class="gl-content">
+                <div class="gl-list" id="topGainersList">
+                    <div class="loading-row">
+                        <div class="spinner"></div>
+                        <span>Loading top gainers...</span>
+                    </div>
+                </div>
+                <div class="gl-list hidden" id="topLosersList">
+                    <div class="loading-row">
+                        <div class="spinner"></div>
+                        <span>Loading top losers...</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <a href="dashboard.html" class="nav-item">
+            <i class="fas fa-chart-line"></i>
+            <span>Dashboard</span>
+        </a>
+        <a href="trending.html" class="nav-item active">
+            <i class="fas fa-fire"></i>
+            <span>Trending</span>
+        </a>
+        <a href="#" class="nav-item" id="searchNavBtn">
+            <i class="fas fa-search"></i>
+            <span>Search</span>
+        </a>
+        <a href="settings.html" class="nav-item">
+            <i class="fas fa-cog"></i>
+            <span>Settings</span>
+        </a>
+    </nav>
+</div>
+
+<script src="../public/app.js" type="module"></script>
+ 
+</body>
+</html>
