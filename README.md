@@ -30,7 +30,11 @@ Before you begin, ensure you have met the following requirements:
 
 1.  **Clone the repository**
      bash
+<<<<<<< HEAD
     git clone https://github.com/oyinlola-tech/blockchain_portfolio.git
+=======
+    git clone https://github.com/your-username/blockchain-app.git
+>>>>>>> b9635b0d4d5b96123de04dec5f5e9725e7d7271c
     cd blockchain-app
      
 
