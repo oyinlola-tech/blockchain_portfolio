@@ -8,7 +8,7 @@ require('dotenv').config();
 const router = express.Router();
 
 // Constants
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
 const DEX_PAPRIKA_API = 'https://api.coinpaprika.com/v1';
 const SALT_ROUNDS = 10;
 
