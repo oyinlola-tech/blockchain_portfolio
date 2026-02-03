@@ -10,10 +10,10 @@ require('dotenv').config(); // Load environment variables from .env file
 // Database connection configuration
 // Using environment variables for security - never hardcode credentials
 const dbConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '', // Empty by default for AMPPS
-  database: process.env.DB_NAME || 'crypto_portfolio_db',
+  host: process.env.DB_HOST ,
+  user: process.env.DB_USER ,
+  password: process.env.DB_PASSWORD, // Empty by default for AMPPS
+  database: process.env.DB_NAME,
   waitForConnections: true,
   connectionLimit: 10, // Limit concurrent connections for safety
   queueLimit: 0
