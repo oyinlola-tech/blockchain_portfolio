@@ -1,222 +1,260 @@
-const express = require('express');
 const path = require('path');
+const fs = require('fs');
+
+// Third-party modules
+const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
-const apiRouter = require('./api');
-const db = require('./db');
+const cookieParser = require('cookie-parser');
+const morgan = require('morgan');
 require('dotenv').config();
 
+// Our custom modules
+const db = require('./db');
+const routes = require('./routes');
+
+// ======================================
+// STEP 2: CONFIGURATION AND SETUP
+// ======================================
+
+// Create Express application
 const app = express();
-const PORT = process.env.PORT;
 
-// Rate limiting
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
-    message: {
-        success: false,
-        message: 'Too many requests from this IP, please try again later.'
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
+// Set server port
+const PORT = process.env.PORT || 3000;
 
-// Security middleware
+// Check for required environment variables
+const requiredEnvVars = ['JWT_SECRET'];
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    console.error(`  ERROR: Missing required environment variable: ${envVar}`);
+    console.error('Please set this in your .env file');
+    process.exit(1);
+  }
+}
+
+// ======================================
+// STEP 3: CREATE PUBLIC DIRECTORY IF IT DOESN'T EXIST
+// ======================================
+
+// Define public directory path
+const publicDir = path.join(__dirname, 'public');
+
+// Check if public directory exists, create if it doesn't
+if (!fs.existsSync(publicDir)) {
+  console.log(' Creating public directory...');
+  fs.mkdirSync(publicDir, { recursive: true });
+}
+
+// ======================================
+// STEP 4: SETUP SECURITY MIDDLEWARE
+// ======================================
+
+// Helmet.js for security headers
 app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-            fontSrc: ["'self'", "https://cdnjs.cloudflare.com"],
-            imgSrc: ["'self'", "data:", "https:", "http:"],
-        },
-    },
-    crossOriginResourcePolicy: { policy: "cross-origin" }
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "cdn.jsdelivr.net", "unpkg.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "fonts.googleapis.com", "cdn.jsdelivr.net"],
+      fontSrc: ["'self'", "fonts.gstatic.com", "cdn.jsdelivr.net"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "api.coinpaprika.com"]
+    }
+  },
+  crossOriginEmbedderPolicy: false
 }));
 
 // CORS configuration
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production' 
-        ? process.env.FRONTEND_URL 
-        : 'http://localhost:8080',
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://yourdomain.com'] // Change this to your actual domain
+    : ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  credentials: true, // Allow cookies to be sent
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Rate limiting to prevent brute force attacks
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
-// Logging
+// Apply rate limiting to all API routes
+app.use('/api', limiter);
+
+// Special stricter rate limiting for authentication routes
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Only 10 attempts per 15 minutes for auth routes
+  message: 'Too many login attempts, please try again later'
+});
+app.use(['/api/login', '/api/register'], authLimiter);
+
+// ======================================
+// STEP 5: SETUP APPLICATION MIDDLEWARE
+// ======================================
+
+// Parse JSON request bodies (with size limit for safety)
+app.use(express.json({ limit: '10kb' }));
+
+// Parse URL-encoded request bodies
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+
+// Parse cookies (for JWT authentication)
+app.use(cookieParser());
+
+// HTTP request logging
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// Apply rate limiting to API routes
-app.use('/api/', limiter);
-
 // Serve static files from public directory
-app.use('/public', express.static(path.join(__dirname, 'public'), {
-    maxAge: process.env.NODE_ENV === 'production' ? '1d' : 0
-}));
-
-// Serve HTML files from views directory
-app.use(express.static(path.join(__dirname, 'views'), {
-    maxAge: process.env.NODE_ENV === 'production' ? '1d' : 0
-}));
-
-// API routes
-app.use('/api', apiRouter);
-
-// Serve HTML pages for frontend routes
-app.get(['/', '/login'], (req, res) => {
-    res.sendFile(path.join(__dirname, 'views', 'login.html'));
-});
-
-app.get('/signup', (req, res) => {
-    res.sendFile(path.join(__dirname, 'views', 'signup.html'));
-});
-
-app.get('/dashboard', (req, res) => {
-    res.sendFile(path.join(__dirname, 'views', 'dashboard.html'));
-});
-
-app.get('/coin', (req, res) => {
-    res.sendFile(path.join(__dirname, 'views', 'coin.html'));
-});
-
-app.get('/trending', (req, res) => {
-    res.sendFile(path.join(__dirname, 'views', 'trending.html'));
-});
-
-app.get('/settings', (req, res) => {
-    res.sendFile(path.join(__dirname, 'views', 'settings.html'));
-});
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: 'Server is healthy',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime()
-    });
-});
-
-// 404 handler for API routes
-app.use('/api/', (req, res) => {
-    res.status(404).json({
-        success: false,
-        message: 'API endpoint not found'
-    });
-});
-
-// 404 handler for frontend routes - serve 404.html if exists, otherwise JSON
-app.use((req, res) => {
-    if (req.accepts('html')) {
-        res.status(404).send('Page not found');
-    } else if (req.accepts('json')) {
-        res.status(404).json({
-            success: false,
-            message: 'Resource not found'
-        });
-    } else {
-        res.status(404).type('txt').send('Not found');
+app.use(express.static(publicDir, {
+  setHeaders: (res, filePath) => {
+    // Set cache-control headers for static files
+    if (filePath.endsWith('.html')) {
+      // Don't cache HTML files
+      res.setHeader('Cache-Control', 'no-store');
+    } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+      // Cache JS and CSS for 1 hour
+      res.setHeader('Cache-Control', 'public, max-age=3600');
     }
+  }
+}));
+
+// ======================================
+// STEP 6: DATABASE INITIALIZATION
+// ======================================
+
+// Initialize database connection when server starts
+async function initializeServer() {
+  try {
+    console.log('🔄 Initializing database connection...');
+    await db.initializeDatabase();
+    console.log('  Database connected successfully');
+    
+    // Start the server
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`🌐 Open http://localhost:${PORT} in your browser`);
+      console.log(`📊 API available at http://localhost:${PORT}/api`);
+      console.log(`🔒 Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+    
+  } catch (error) {
+    console.error('  Failed to initialize server:', error);
+    process.exit(1);
+  }
+}
+
+// ======================================
+// STEP 7: APPLICATION ROUTES
+// ======================================
+
+// Health check endpoint (for monitoring)
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    service: 'Crypto Portfolio API',
+    version: '1.0.0'
+  });
+});
+
+// Mount all API routes from routes.js
+app.use('/', routes);
+
+// ======================================
+// STEP 8: SERVE FRONTEND FILES
+// ======================================
+
+// Route to serve the main HTML file
+app.get('/', (req, res) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
+
+// Catch-all route for frontend routing (for single-page application)
+app.get('*', (req, res) => {
+  // If the request is for an API route, return 404
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+  
+  // Otherwise, serve the frontend HTML (for client-side routing)
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
+
+// ======================================
+// STEP 9: ERROR HANDLING MIDDLEWARE
+// ======================================
+
+// 404 handler for unmatched API routes
+app.use('/api/*', (req, res) => {
+  res.status(404).json({
+    error: 'API endpoint not found',
+    path: req.originalUrl
+  });
 });
 
 // Global error handler
 app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err);
-
-    // Handle JWT errors
-    if (err.name === 'JsonWebTokenError') {
-        return res.status(401).json({
-            success: false,
-            message: 'Invalid token'
-        });
-    }
-
-    if (err.name === 'TokenExpiredError') {
-        return res.status(401).json({
-            success: false,
-            message: 'Token expired'
-        });
-    }
-
-    // Handle validation errors
-    if (err.name === 'ValidationError') {
-        return res.status(400).json({
-            success: false,
-            message: 'Validation error',
-            errors: err.errors
-        });
-    }
-
-    // Handle rate limit errors
-    if (err.name === 'RateLimitError') {
-        return res.status(429).json({
-            success: false,
-            message: 'Too many requests, please try again later.'
-        });
-    }
-
-    // Default error
-    res.status(err.status || 500).json({
-        success: false,
-        message: process.env.NODE_ENV === 'production' 
-            ? 'Internal server error' 
-            : err.message,
-        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-    });
+  console.error(' Unhandled error:', err);
+  
+  // Don't leak stack traces in production
+  const errorDetails = process.env.NODE_ENV === 'production' 
+    ? 'Internal server error'
+    : err.message;
+  
+  res.status(err.status || 500).json({
+    error: errorDetails,
+    ...(process.env.NODE_ENV !== 'production' && { stack: err.stack })
+  });
 });
 
-// Graceful shutdown
-const gracefulShutdown = () => {
-    console.log('Shutting down gracefully...');
-    
-    // Close database connection
-    db.close().then(() => {
-        console.log('Database connection closed');
-        process.exit(0);
-    }).catch(err => {
-        console.error('Error closing database connection:', err);
-        process.exit(1);
-    });
-};
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('💥 Uncaught Exception:', error);
+  // Don't exit in development, but log heavily
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
+  }
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error(' Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+// ======================================
+// STEP 10: CLEANUP TASKS
+// ======================================
+
+// Function to gracefully shutdown server
+function gracefulShutdown() {
+  console.log('\n Received shutdown signal');
+  console.log(' Cleaning up before shutdown...');
+  
+  // Perform cleanup tasks here
+  // Example: Close database connections, clear temp files, etc.
+  
+  console.log(' Cleanup complete');
+  process.exit(0);
+}
 
 // Handle shutdown signals
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
 
-// Handle uncaught exceptions
-process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception:', err);
-    gracefulShutdown();
-});
+// ======================================
+// STEP 11: START THE SERVER
+// ======================================
 
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
+// Initialize and start the server
+initializeServer();
 
-// Start server only if not in test environment
-if (process.env.NODE_ENV !== 'test') {
-    app.listen(PORT, async () => {
-        console.log(`Server is running on http://localhost:${PORT}`);
-        console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-        
-        try {
-            // Initialize database connection
-            await db.initializeDatabase();
-            console.log('Database connected successfully');
-        } catch (error) {
-            console.error('Failed to connect to database:', error);
-            process.exit(1);
-        }
-    });
-}
-
+// Export app for testing purposes
 module.exports = app;
- 

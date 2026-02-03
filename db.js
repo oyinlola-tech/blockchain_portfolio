@@ -1,468 +1,372 @@
-const mysql = require('mysql2/promise');
-require('dotenv').config();
+// db.js
+// Database connection and setup for the crypto portfolio app
+// This file handles all database operations and table creation
 
-class Database {
-    constructor() {
-        this.pool = null;
-        this.initializeDatabase();
-    }
+// Import required modules
+const mysql = require('mysql2/promise'); // Use promise-based MySQL
+const bcrypt = require('bcrypt'); // For password hashing
+require('dotenv').config(); // Load environment variables from .env file
 
-    async initializeDatabase() {
-        try {
-            // First, create a connection without database to create the database if it doesn't exist
-            const connection = await mysql.createConnection({
-                host: process.env.DB_HOST || 'localhost',
-                user: process.env.DB_USER || 'root',
-                password: process.env.DB_PASSWORD || '',
-                port: process.env.DB_PORT || 3306
-            });
+// Database connection configuration
+// Using environment variables for security - never hardcode credentials
+const dbConfig = {
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '', // Empty by default for AMPPS
+  database: process.env.DB_NAME || 'crypto_portfolio_db',
+  waitForConnections: true,
+  connectionLimit: 10, // Limit concurrent connections for safety
+  queueLimit: 0
+};
 
-            // Create database if it doesn't exist
-            await connection.query(`CREATE DATABASE IF NOT EXISTS \`${process.env.DB_NAME}\``);
-            await connection.end();
+// Create a connection pool for better performance
+// A pool manages multiple database connections
+let pool;
 
-            // Now create connection pool with the database
-            this.pool = mysql.createPool({
-                host: process.env.DB_HOST ,
-                user: process.env.DB_USER ,
-                password: process.env.DB_PASSWORD,
-                database: process.env.DB_NAME ,
-                port: process.env.DB_PORT,
-                waitForConnections: true,
-                connectionLimit: 10,
-                queueLimit: 0,
-                enableKeepAlive: true,
-                keepAliveInitialDelay: 0
-            });
-
-            await this.createTables();
-            console.log('Database initialized successfully');
-        } catch (error) {
-            console.error('Failed to initialize database:', error);
-            process.exit(1);
-        }
-    }
-
-    async createTables() {
-        const connection = await this.pool.getConnection();
-        
-        try {
-            // Users table
-            await connection.query(`
-                CREATE TABLE IF NOT EXISTS users (
-                    id INT PRIMARY KEY AUTO_INCREMENT,
-                    name VARCHAR(100) NOT NULL,
-                    email VARCHAR(255) UNIQUE NOT NULL,
-                    hashed_password VARCHAR(255) NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    INDEX idx_email (email)
-                )
-            `);
-
-            // Coins table - stores metadata about tracked coins
-            await connection.query(`
-                CREATE TABLE IF NOT EXISTS coins (
-                    id VARCHAR(50) PRIMARY KEY,
-                    symbol VARCHAR(20) NOT NULL,
-                    name VARCHAR(100) NOT NULL,
-                    image_url VARCHAR(500),
-                    market_data JSON,
-                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    INDEX idx_symbol (symbol),
-                    INDEX idx_name (name)
-                )
-            `);
-
-            // User coins table - user's portfolio holdings
-            await connection.query(`
-                CREATE TABLE IF NOT EXISTS user_coins (
-                    id INT PRIMARY KEY AUTO_INCREMENT,
-                    user_id INT NOT NULL,
-                    coin_id VARCHAR(50) NOT NULL,
-                    balance DECIMAL(20, 8) NOT NULL DEFAULT 0,
-                    purchase_price DECIMAL(20, 8),
-                    purchase_date TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    FOREIGN KEY (coin_id) REFERENCES coins(id) ON DELETE CASCADE,
-                    UNIQUE KEY unique_user_coin (user_id, coin_id),
-                    INDEX idx_user_id (user_id),
-                    INDEX idx_coin_id (coin_id)
-                )
-            `);
-
-            // Alerts table
-            await connection.query(`
-                CREATE TABLE IF NOT EXISTS alerts (
-                    id INT PRIMARY KEY AUTO_INCREMENT,
-                    user_id INT NOT NULL,
-                    coin_id VARCHAR(50) NOT NULL,
-                    alert_type ENUM('price_above', 'price_below', 'percent_change', 'volume_spike') NOT NULL,
-                    target_value DECIMAL(20, 8) NOT NULL,
-                    alert_name VARCHAR(100),
-                    notification_enabled BOOLEAN DEFAULT true,
-                    email_alert_enabled BOOLEAN DEFAULT false,
-                    is_active BOOLEAN DEFAULT true,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    triggered_at TIMESTAMP NULL,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    FOREIGN KEY (coin_id) REFERENCES coins(id) ON DELETE CASCADE,
-                    INDEX idx_user_id (user_id),
-                    INDEX idx_coin_id (coin_id),
-                    INDEX idx_is_active (is_active)
-                )
-            `);
-
-            // Activity logs table
-            await connection.query(`
-                CREATE TABLE IF NOT EXISTS activity_logs (
-                    id INT PRIMARY KEY AUTO_INCREMENT,
-                    user_id INT NOT NULL,
-                    action_type ENUM('signup', 'login', 'logout', 'coin_added', 'coin_removed', 'alert_set', 'alert_triggered', 'password_changed', 'settings_updated') NOT NULL,
-                    details JSON,
-                    ip_address VARCHAR(45),
-                    user_agent TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    INDEX idx_user_id (user_id),
-                    INDEX idx_created_at (created_at)
-                )
-            `);
-
-            // Settings table
-            await connection.query(`
-                CREATE TABLE IF NOT EXISTS settings (
-                    id INT PRIMARY KEY AUTO_INCREMENT,
-                    user_id INT UNIQUE NOT NULL,
-                    theme ENUM('light', 'dark', 'auto') DEFAULT 'auto',
-                    currency VARCHAR(3) DEFAULT 'USD',
-                    email_notifications BOOLEAN DEFAULT true,
-                    price_alerts BOOLEAN DEFAULT true,
-                    market_updates BOOLEAN DEFAULT false,
-                    portfolio_updates BOOLEAN DEFAULT true,
-                    two_factor_enabled BOOLEAN DEFAULT false,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                )
-            `);
-
-            // Session management table
-            await connection.query(`
-                CREATE TABLE IF NOT EXISTS user_sessions (
-                    id INT PRIMARY KEY AUTO_INCREMENT,
-                    user_id INT NOT NULL,
-                    session_token VARCHAR(255) UNIQUE NOT NULL,
-                    ip_address VARCHAR(45),
-                    user_agent TEXT,
-                    expires_at TIMESTAMP NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    INDEX idx_session_token (session_token),
-                    INDEX idx_user_id (user_id),
-                    INDEX idx_expires_at (expires_at)
-                )
-            `);
-
-            console.log('All tables created successfully');
-        } catch (error) {
-            console.error('Error creating tables:', error);
-            throw error;
-        } finally {
-            connection.release();
-        }
-    }
-
-    // User methods
-    async createUser(name, email, hashedPassword) {
-        const [result] = await this.pool.query(
-            'INSERT INTO users (name, email, hashed_password) VALUES (?, ?, ?)',
-            [name, email, hashedPassword]
-        );
-        return result.insertId;
-    }
-
-    async getUserByEmail(email) {
-        const [rows] = await this.pool.query(
-            'SELECT * FROM users WHERE email = ?',
-            [email]
-        );
-        return rows[0];
-    }
-
-    async getUserById(id) {
-        const [rows] = await this.pool.query(
-            'SELECT id, name, email, created_at FROM users WHERE id = ?',
-            [id]
-        );
-        return rows[0];
-    }
-
-    async updateUserPassword(userId, hashedPassword) {
-        await this.pool.query(
-            'UPDATE users SET hashed_password = ? WHERE id = ?',
-            [hashedPassword, userId]
-        );
-    }
-
-    // Coin methods
-    async getOrCreateCoin(coinId, symbol, name, imageUrl = null) {
-        const [rows] = await this.pool.query(
-            'SELECT * FROM coins WHERE id = ?',
-            [coinId]
-        );
-        
-        if (rows.length === 0) {
-            await this.pool.query(
-                'INSERT INTO coins (id, symbol, name, image_url) VALUES (?, ?, ?, ?)',
-                [coinId, symbol, name, imageUrl]
-            );
-        }
-        
-        return coinId;
-    }
-
-    async updateCoinMarketData(coinId, marketData) {
-        await this.pool.query(
-            'UPDATE coins SET market_data = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?',
-            [JSON.stringify(marketData), coinId]
-        );
-    }
-
-    async getCoin(coinId) {
-        const [rows] = await this.pool.query(
-            'SELECT * FROM coins WHERE id = ?',
-            [coinId]
-        );
-        return rows[0];
-    }
-
-    async searchCoins(query) {
-        const [rows] = await this.pool.query(
-            'SELECT * FROM coins WHERE name LIKE ? OR symbol LIKE ? LIMIT 20',
-            [`%${query}%`, `%${query}%`]
-        );
-        return rows;
-    }
-
-    // User coins methods
-    async addUserCoin(userId, coinId, balance, purchasePrice = null, purchaseDate = null) {
-        const [result] = await this.pool.query(
-            `INSERT INTO user_coins (user_id, coin_id, balance, purchase_price, purchase_date) 
-             VALUES (?, ?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE 
-             balance = balance + VALUES(balance),
-             updated_at = CURRENT_TIMESTAMP`,
-            [userId, coinId, balance, purchasePrice, purchaseDate]
-        );
-        return result.insertId;
-    }
-
-    async getUserCoins(userId) {
-        const [rows] = await this.pool.query(
-            `SELECT uc.*, c.symbol, c.name, c.image_url 
-             FROM user_coins uc 
-             JOIN coins c ON uc.coin_id = c.id 
-             WHERE uc.user_id = ?`,
-            [userId]
-        );
-        return rows;
-    }
-
-    async updateUserCoinBalance(userId, coinId, newBalance) {
-        await this.pool.query(
-            'UPDATE user_coins SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND coin_id = ?',
-            [newBalance, userId, coinId]
-        );
-    }
-
-    async removeUserCoin(userId, coinId) {
-        await this.pool.query(
-            'DELETE FROM user_coins WHERE user_id = ? AND coin_id = ?',
-            [userId, coinId]
-        );
-    }
-
-    // Alert methods
-    async createAlert(userId, coinId, alertType, targetValue, alertName = null, notificationEnabled = true, emailAlertEnabled = false) {
-        const [result] = await this.pool.query(
-            `INSERT INTO alerts (user_id, coin_id, alert_type, target_value, alert_name, notification_enabled, email_alert_enabled) 
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [userId, coinId, alertType, targetValue, alertName, notificationEnabled, emailAlertEnabled]
-        );
-        return result.insertId;
-    }
-
-    async getUserAlerts(userId, coinId = null) {
-        let query = `
-            SELECT a.*, c.symbol, c.name 
-            FROM alerts a 
-            JOIN coins c ON a.coin_id = c.id 
-            WHERE a.user_id = ? AND a.is_active = true
-        `;
-        const params = [userId];
-        
-        if (coinId) {
-            query += ' AND a.coin_id = ?';
-            params.push(coinId);
-        }
-        
-        query += ' ORDER BY a.created_at DESC';
-        
-        const [rows] = await this.pool.query(query, params);
-        return rows;
-    }
-
-    async deleteAlert(userId, alertId) {
-        await this.pool.query(
-            'DELETE FROM alerts WHERE id = ? AND user_id = ?',
-            [alertId, userId]
-        );
-    }
-
-    // Activity log methods
-    async logActivity(userId, actionType, details = null, ipAddress = null, userAgent = null) {
-        await this.pool.query(
-            `INSERT INTO activity_logs (user_id, action_type, details, ip_address, user_agent) 
-             VALUES (?, ?, ?, ?, ?)`,
-            [userId, actionType, JSON.stringify(details), ipAddress, userAgent]
-        );
-    }
-
-    async getUserActivity(userId, limit = 20) {
-        const [rows] = await this.pool.query(
-            `SELECT action_type, details, created_at 
-             FROM activity_logs 
-             WHERE user_id = ? 
-             ORDER BY created_at DESC 
-             LIMIT ?`,
-            [userId, limit]
-        );
-        return rows;
-    }
-
-    // Settings methods
-    async getSettings(userId) {
-        const [rows] = await this.pool.query(
-            'SELECT * FROM settings WHERE user_id = ?',
-            [userId]
-        );
-        
-        if (rows.length === 0) {
-            // Create default settings if none exist
-            await this.pool.query(
-                `INSERT INTO settings (user_id) VALUES (?)`,
-                [userId]
-            );
-            return await this.getSettings(userId);
-        }
-        
-        return rows[0];
-    }
-
-    async updateSettings(userId, updates) {
-        const allowedFields = ['theme', 'currency', 'email_notifications', 'price_alerts', 'market_updates', 'portfolio_updates', 'two_factor_enabled'];
-        const setClauses = [];
-        const values = [];
-        
-        Object.keys(updates).forEach(key => {
-            if (allowedFields.includes(key)) {
-                setClauses.push(`${key} = ?`);
-                values.push(updates[key]);
-            }
-        });
-        
-        if (setClauses.length === 0) {
-            return;
-        }
-        
-        values.push(userId);
-        
-        await this.pool.query(
-            `UPDATE settings SET ${setClauses.join(', ')} WHERE user_id = ?`,
-            values
-        );
-    }
-
-    // Session methods
-    async createSession(userId, sessionToken, expiresAt, ipAddress = null, userAgent = null) {
-        await this.pool.query(
-            `INSERT INTO user_sessions (user_id, session_token, ip_address, user_agent, expires_at) 
-             VALUES (?, ?, ?, ?, ?)`,
-            [userId, sessionToken, ipAddress, userAgent, expiresAt]
-        );
-    }
-
-    async getSession(sessionToken) {
-        const [rows] = await this.pool.query(
-            `SELECT us.*, u.id as user_id, u.name, u.email 
-             FROM user_sessions us 
-             JOIN users u ON us.user_id = u.id 
-             WHERE us.session_token = ? AND us.expires_at > NOW()`,
-            [sessionToken]
-        );
-        return rows[0];
-    }
-
-    async deleteSession(sessionToken) {
-        await this.pool.query(
-            'DELETE FROM user_sessions WHERE session_token = ?',
-            [sessionToken]
-        );
-    }
-
-    async cleanupExpiredSessions() {
-        await this.pool.query(
-            'DELETE FROM user_sessions WHERE expires_at <= NOW()'
-        );
-    }
-
-    // Dashboard methods
-    async getDashboardData(userId) {
-        const userCoins = await this.getUserCoins(userId);
-        
-        // Calculate total portfolio value (would need current prices from API)
-        // This is a placeholder - actual implementation would fetch current prices
-        let totalValue = 0;
-        let dailyChange = 0;
-        
-        userCoins.forEach(coin => {
-            // These values would come from real-time price data
-            const currentPrice = 0; // Placeholder
-            const priceChange = 0; // Placeholder
-            
-            totalValue += coin.balance * currentPrice;
-            dailyChange += coin.balance * priceChange;
-        });
-        
-        return {
-            totalValue,
-            totalChange: totalValue > 0 ? (dailyChange / totalValue) * 100 : 0,
-            dailyChange,
-            dailyChangePercent: totalValue > 0 ? (dailyChange / totalValue) * 100 : 0,
-            coinsCount: userCoins.length,
-            holdings: userCoins
-        };
-    }
-
-    async getPerformanceData(userId, range = '7d') {
-        // This would calculate performance over time
-        // For now, return placeholder data structure
-        return {
-            chartData: [],
-            range: range
-        };
-    }
-
-    // Close connection pool
-    async close() {
-        if (this.pool) {
-            await this.pool.end();
-        }
-    }
+// Function to initialize database connection and create tables
+async function initializeDatabase() {
+  try {
+    // Create connection pool
+    pool = mysql.createPool(dbConfig);
+    
+    console.log('  Database connection pool created');
+    
+    // Create tables if they don't exist
+    await createTables();
+    
+    console.log('  Database tables initialized successfully');
+    return pool;
+  } catch (error) {
+    console.error(' Database initialization failed:', error);
+    throw error;
+  }
 }
 
-module.exports = new Database();
- 
+// Function to create all necessary tables
+async function createTables() {
+  const connection = await pool.getConnection();
+  
+  try {
+    // Users table - stores user information
+    // Using prepared statements to prevent SQL injection
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        full_name VARCHAR(255) NOT NULL,
+        theme_preference ENUM('light', 'dark') DEFAULT 'light',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // User_sessions table - stores JWT tokens for authentication
+    // HTTP-only cookies will reference these tokens
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        token_hash VARCHAR(255) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        INDEX idx_token_hash (token_hash),
+        INDEX idx_expires_at (expires_at)
+      )
+    `);
+    
+    // Portfolio table - stores user's crypto holdings
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS portfolio (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        coin_id VARCHAR(100) NOT NULL, // From DexPaprika API
+        coin_symbol VARCHAR(20) NOT NULL, // Like BTC, ETH
+        coin_name VARCHAR(100) NOT NULL,
+        amount DECIMAL(20, 8) NOT NULL, // Support up to 8 decimal places for crypto
+        purchase_price DECIMAL(20, 2) NOT NULL, // In USD
+        current_price DECIMAL(20, 2), // Updated from API
+        current_value DECIMAL(20, 2), // amount * current_price
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_user_coin (user_id, coin_id)
+      )
+    `);
+    
+    // Transactions table - tracks all buy/sell transactions
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        coin_id VARCHAR(100) NOT NULL,
+        coin_symbol VARCHAR(20) NOT NULL,
+        transaction_type ENUM('buy', 'sell') NOT NULL,
+        amount DECIMAL(20, 8) NOT NULL,
+        price_per_unit DECIMAL(20, 2) NOT NULL,
+        total_value DECIMAL(20, 2) NOT NULL,
+        transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+    
+    // Coin_watchlist table - for trending/quick access
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS coin_watchlist (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        coin_id VARCHAR(100) NOT NULL,
+        coin_symbol VARCHAR(20) NOT NULL,
+        coin_name VARCHAR(100) NOT NULL,
+        added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_user_watchlist (user_id, coin_id)
+      )
+    `);
+    
+    console.log('  All database tables created/verified');
+  } catch (error) {
+    console.error(' Error creating tables:', error);
+    throw error;
+  } finally {
+    // Always release the connection back to the pool
+    connection.release();
+  }
+}
+
+// User-related database operations
+
+// Create a new user with hashed password
+async function createUser(email, password, fullName) {
+  const connection = await pool.getConnection();
+  
+  try {
+    // Hash the password before storing (NEVER store plain text)
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+    
+    const [result] = await connection.execute(
+      'INSERT INTO users (email, password_hash, full_name) VALUES (?, ?, ?)',
+      [email, passwordHash, fullName]
+    );
+    
+    return { id: result.insertId, email, fullName };
+  } catch (error) {
+    console.error('Error creating user:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+// Verify user credentials (for login)
+async function verifyUser(email, password) {
+  const connection = await pool.getConnection();
+  
+  try {
+    // Get user by email
+    const [rows] = await connection.execute(
+      'SELECT id, email, password_hash, full_name FROM users WHERE email = ?',
+      [email]
+    );
+    
+    if (rows.length === 0) {
+      return null; // User not found
+    }
+    
+    const user = rows[0];
+    
+    // Compare provided password with hashed password
+    const isValid = await bcrypt.compare(password, user.password_hash);
+    
+    if (!isValid) {
+      return null; // Invalid password
+    }
+    
+    // Return user data (excluding password hash)
+    return {
+      id: user.id,
+      email: user.email,
+      fullName: user.full_name
+    };
+  } catch (error) {
+    console.error(' Error verifying user:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+// Portfolio-related database operations
+
+// Get user's portfolio with current values
+async function getUserPortfolio(userId) {
+  const connection = await pool.getConnection();
+  
+  try {
+    const [rows] = await connection.execute(
+      `SELECT 
+        coin_id,
+        coin_symbol,
+        coin_name,
+        amount,
+        purchase_price,
+        current_price,
+        current_value,
+        created_at
+      FROM portfolio 
+      WHERE user_id = ? 
+      ORDER BY current_value DESC`,
+      [userId]
+    );
+    
+    return rows;
+  } catch (error) {
+    console.error(' Error getting portfolio:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+// Add a coin to user's portfolio
+async function addToPortfolio(userId, coinData) {
+  const connection = await pool.getConnection();
+  
+  try {
+    const [result] = await connection.execute(
+      `INSERT INTO portfolio 
+        (user_id, coin_id, coin_symbol, coin_name, amount, purchase_price, current_price, current_value) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+        amount = amount + VALUES(amount),
+        purchase_price = VALUES(purchase_price),
+        updated_at = CURRENT_TIMESTAMP`,
+      [
+        userId,
+        coinData.coin_id,
+        coinData.coin_symbol,
+        coinData.coin_name,
+        coinData.amount,
+        coinData.purchase_price,
+        coinData.current_price,
+        coinData.current_value
+      ]
+    );
+    
+    return result;
+  } catch (error) {
+    console.error('Error adding to portfolio:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+// Update portfolio prices from API
+async function updatePortfolioPrices(userId, priceUpdates) {
+  const connection = await pool.getConnection();
+  
+  try {
+    for (const update of priceUpdates) {
+      await connection.execute(
+        `UPDATE portfolio 
+         SET current_price = ?, 
+             current_value = amount * ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = ? AND coin_id = ?`,
+        [update.current_price, update.current_price, userId, update.coin_id]
+      );
+    }
+  } catch (error) {
+    console.error('Error updating portfolio prices:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+// Session management
+
+// Store JWT token hash in database
+async function storeSessionToken(userId, tokenHash, expiresAt) {
+  const connection = await pool.getConnection();
+  
+  try {
+    await connection.execute(
+      'INSERT INTO user_sessions (user_id, token_hash, expires_at) VALUES (?, ?, ?)',
+      [userId, tokenHash, expiresAt]
+    );
+  } catch (error) {
+    console.error(' Error storing session token:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+// Verify session token
+async function verifySessionToken(tokenHash) {
+  const connection = await pool.getConnection();
+  
+  try {
+    const [rows] = await connection.execute(
+      `SELECT us.user_id, u.email, u.full_name 
+       FROM user_sessions us
+       JOIN users u ON us.user_id = u.id
+       WHERE us.token_hash = ? AND us.expires_at > NOW()`,
+      [tokenHash]
+    );
+    
+    if (rows.length === 0) {
+      return null; // Token expired or not found
+    }
+    
+    return rows[0];
+  } catch (error) {
+    console.error(' Error verifying session token:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+// Cleanup expired sessions
+async function cleanupExpiredSessions() {
+  const connection = await pool.getConnection();
+  
+  try {
+    await connection.execute(
+      'DELETE FROM user_sessions WHERE expires_at <= NOW()'
+    );
+  } catch (error) {
+    console.error(' Error cleaning up sessions:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+// Export all functions for use in other files
+module.exports = {
+  initializeDatabase,
+  createUser,
+  verifyUser,
+  getUserPortfolio,
+  addToPortfolio,
+  updatePortfolioPrices,
+  storeSessionToken,
+  verifySessionToken,
+  cleanupExpiredSessions,
+  getPool: () => pool // Getter for the pool if needed elsewhere
+};
+
+// Note: This file only sets up the database structure and functions.
+// We'll use environment variables for credentials in production.
+// To set up environment variables, create a .env file with:
+// DB_HOST=localhost
+// DB_USER=root
+// DB_PASSWORD=yourpassword
+// DB_NAME=crypto_portfolio_db
+// JWT_SECRET=yoursupersecretjwtkey

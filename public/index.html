@@ -1,0 +1,303 @@
+<!-- public/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoPortfolio - Manage Your Cryptocurrency Investments</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💰</text></svg>">
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- CSS Styles -->
+    <link rel="stylesheet" href="/style.css">
+    
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="description" content="Track and manage your cryptocurrency portfolio with real-time prices and analytics">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-spinner">
+            <div class="spinner-circle"></div>
+        </div>
+        <p class="loading-text">Loading Crypto Portfolio...</p>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="app-container" class="app-container hidden">
+        <!-- Header Section -->
+        <header class="app-header">
+            <div class="header-content">
+                <!-- User Greeting and Portfolio Balance -->
+                <div class="user-section">
+                    <div class="welcome-message">
+                        <h1 id="welcome-text" class="welcome-text">Welcome</h1>
+                        <p id="user-name" class="user-name">Loading...</p>
+                    </div>
+                    
+                    <div class="portfolio-balance">
+                        <div class="balance-label">
+                            <span class="label-text">Portfolio balance</span>
+                            <button id="balance-visibility" class="visibility-toggle" aria-label="Toggle balance visibility">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                        <div class="balance-amount">
+                            <span id="portfolio-total" class="total-amount">$0.00</span>
+                            <span id="portfolio-change" class="change-amount neutral">0.00%</span>
+                        </div>
+                        <div class="balance-converted">
+                            <span id="portfolio-converted" class="converted-amount">~ NGN 0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Theme Toggle Button -->
+                <button id="theme-toggle" class="theme-toggle" aria-label="Toggle dark/light mode">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="app-main">
+            <!-- Action Buttons Section -->
+            <section class="action-buttons">
+                <div class="button-group">
+                    <button id="deposit-btn" class="action-btn primary-btn">
+                        <i class="fas fa-wallet"></i>
+                        <span>Deposit</span>
+                    </button>
+                    <button id="withdraw-btn" class="action-btn secondary-btn">
+                        <i class="fas fa-money-bill-wave"></i>
+                        <span>Withdraw</span>
+                    </button>
+                </div>
+                
+                <div class="quick-actions">
+                    <button id="buy-btn" class="quick-action-btn">
+                        <i class="fas fa-shopping-cart"></i>
+                        <span>Buy</span>
+                    </button>
+                    <button id="sell-btn" class="quick-action-btn">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Sell</span>
+                    </button>
+                    <button id="swap-btn" class="quick-action-btn">
+                        <i class="fas fa-exchange-alt"></i>
+                        <span>Swap</span>
+                    </button>
+                    <button id="more-btn" class="quick-action-btn">
+                        <i class="fas fa-ellipsis-h"></i>
+                        <span>More</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Promotional Banner -->
+            <section class="promo-banner">
+                <div class="banner-content">
+                    <div class="banner-icon">
+                        <i class="fas fa-gift"></i>
+                    </div>
+                    <div class="banner-text">
+                        <h3>Earn THB 2000</h3>
+                        <p>Stand a chance to earn THB 2000 by sharing your link</p>
+                    </div>
+                    <button id="copy-link-btn" class="banner-btn">
+                        <i class="fas fa-link"></i>
+                        <span>Copy Link</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Popular Tokens Section -->
+            <section class="tokens-section">
+                <div class="section-header">
+                    <h2 class="section-title">Popular Tokens</h2>
+                    <button id="view-all-tokens" class="view-all-btn">View All</button>
+                </div>
+                
+                <div class="tokens-list" id="popular-tokens-list">
+                    <!-- Tokens will be loaded dynamically -->
+                    <div class="token-loading">
+                        <div class="loading-shimmer"></div>
+                        <div class="loading-shimmer"></div>
+                        <div class="loading-shimmer"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Your Portfolio Section -->
+            <section class="portfolio-section">
+                <div class="section-header">
+                    <h2 class="section-title">Your Portfolio</h2>
+                    <button id="refresh-portfolio" class="refresh-btn" aria-label="Refresh portfolio">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                
+                <div class="portfolio-list" id="portfolio-list">
+                    <!-- Portfolio items will be loaded dynamically -->
+                    <div class="empty-portfolio">
+                        <i class="fas fa-wallet"></i>
+                        <h3>No Cryptocurrencies Yet</h3>
+                        <p>Add your first cryptocurrency to start tracking</p>
+                        <button id="add-first-crypto" class="add-btn">
+                            <i class="fas fa-plus"></i>
+                            <span>Add Cryptocurrency</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Hidden sections for other views -->
+            <div id="search-view" class="view-section hidden">
+                <!-- Search view will be loaded here -->
+            </div>
+
+            <div id="trending-view" class="view-section hidden">
+                <!-- Trending view will be loaded here -->
+            </div>
+
+            <div id="settings-view" class="view-section hidden">
+                <!-- Settings view will be loaded here -->
+            </div>
+        </main>
+
+        <!-- Bottom Navigation Bar -->
+        <nav class="bottom-nav">
+            <div class="nav-container">
+                <button class="nav-item active" data-view="home">
+                    <i class="fas fa-home"></i>
+                    <span class="nav-label">Home</span>
+                </button>
+                <button class="nav-item" data-view="search">
+                    <i class="fas fa-search"></i>
+                    <span class="nav-label">Search</span>
+                </button>
+                <button class="nav-item" data-view="trending">
+                    <i class="fas fa-chart-line"></i>
+                    <span class="nav-label">Trending</span>
+                </button>
+                <button class="nav-item" data-view="settings">
+                    <i class="fas fa-cog"></i>
+                    <span class="nav-label">Settings</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- Login/Register Modal -->
+        <div id="auth-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="auth-modal-title">Welcome to CryptoPortfolio</h2>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="login-form" class="auth-form">
+                        <div class="form-group">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Password</label>
+                            <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+                        </div>
+                        <button id="login-btn" class="auth-btn primary-btn">Login</button>
+                        <p class="auth-switch">
+                            Don't have an account? 
+                            <button id="switch-to-register" class="switch-btn">Register</button>
+                        </p>
+                    </div>
+                    
+                    <div id="register-form" class="auth-form hidden">
+                        <div class="form-group">
+                            <label for="reg-name">Full Name</label>
+                            <input type="text" id="reg-name" placeholder="John Doe" autocomplete="name">
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-email">Email</label>
+                            <input type="email" id="reg-email" placeholder="you@example.com" autocomplete="email">
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-password">Password</label>
+                            <input type="password" id="reg-password" placeholder="••••••••" autocomplete="new-password">
+                            <small>Minimum 8 characters</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-confirm">Confirm Password</label>
+                            <input type="password" id="reg-confirm" placeholder="••••••••" autocomplete="new-password">
+                        </div>
+                        <button id="register-btn" class="auth-btn primary-btn">Create Account</button>
+                        <p class="auth-switch">
+                            Already have an account? 
+                            <button id="switch-to-login" class="switch-btn">Login</button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Crypto Modal -->
+        <div id="add-crypto-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Add Cryptocurrency</h2>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="crypto-search" placeholder="Search cryptocurrency...">
+                    </div>
+                    <div class="search-results" id="crypto-search-results">
+                        <!-- Search results will appear here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Crypto Details Modal -->
+        <div id="crypto-details-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="crypto-modal-title">Cryptocurrency Details</h2>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <!-- Crypto details will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div id="toast-container" class="toast-container">
+            <!-- Toasts will be added here dynamically -->
+        </div>
+
+        <!-- Audio elements for feedback -->
+        <audio id="click-sound" preload="auto">
+            <source src="https://assets.mixkit.co/sfx/preview/mixkit-select-click-1109.mp3" type="audio/mpeg">
+        </audio>
+        <audio id="success-sound" preload="auto">
+            <source src="https://assets.mixkit.co/sfx/preview/mixkit-correct-answer-tone-2870.mp3" type="audio/mpeg">
+        </audio>
+    </div>
+
+    <!-- JavaScript Files -->
+    <script src="/app.js" defer></script>
+    
+    <!-- No inline scripts - all JavaScript is in external files -->
+</body>
+</html>
