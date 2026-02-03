@@ -93,8 +93,8 @@ async function apiFetch(endpoint, options = {}) {
             headers
         });
 
-        if (response.status === 401) {
-            // Unauthorized - clear token and redirect to login
+        if (response.status === 401 && !endpoint.startsWith('/auth/')) {
+            // Unauthorized on a non-auth route - clear token and redirect to login
             localStorage.removeItem('authToken');
             authState.token = null;
             redirectTo('login.html');
@@ -131,9 +131,15 @@ const authApi = {
     },
 
     async logout() {
-        return await apiFetch('/auth/logout', {
-            method: 'POST'
-        });
+        // Clear local state first to ensure immediate logout on client
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('userName');
+        localStorage.removeItem('userEmail');
+        authState.token = null;
+        redirectTo('login.html');
+
+        // Then, try to inform the server. We don't need to wait for it.
+        await apiFetch('/auth/logout', { method: 'POST' }).catch(err => console.error('Server logout failed', err));
     },
 
     async changePassword(data) {
@@ -330,18 +336,26 @@ const signupController = {
 };
 
 const dashboardController = {
+    dashboardData: null,
+
     async init() {
         // Check authentication
         if (!authState.token) {
             redirectTo('login.html');
             return;
         }
-
-        this.setupEventListeners();
-        await this.loadDashboardData();
-        await this.loadPerformanceChart();
-        await this.loadHoldings();
-        await this.loadActivity();
+        try {
+            this.setupEventListeners();
+            const response = await dashboardApi.getDashboard();
+            this.dashboardData = response.data;
+            this.renderDashboardData();
+            this.renderHoldings();
+            await this.loadPerformanceChart();
+            await this.loadActivity();
+        } catch (error) {
+            console.error('Failed to load dashboard data:', error);
+            // You could show a global error on the dashboard here
+        }
     },
 
     setupEventListeners() {
@@ -352,10 +366,7 @@ const dashboardController = {
                 e.preventDefault();
                 try {
                     await authApi.logout();
-                } finally {
-                    localStorage.removeItem('authToken');
-                    redirectTo('login.html');
-                }
+                } catch (error) { console.error('Logout failed', error); }
             });
         }
 
@@ -395,10 +406,9 @@ const dashboardController = {
         }
     },
 
-    async loadDashboardData() {
+    renderDashboardData() {
         try {
-            const data = await dashboardApi.getDashboard();
-            
+            const data = this.dashboardData;
             if (data) {
                 // Update portfolio summary
                 const totalValue = document.getElementById('totalValue');
@@ -454,7 +464,7 @@ const dashboardController = {
         }
     },
 
-    async loadHoldings() {
+    renderHoldings() {
         const tableBody = document.getElementById('holdingsTableBody');
         const emptyState = document.getElementById('emptyHoldings');
         
@@ -472,12 +482,10 @@ const dashboardController = {
         `;
 
         try {
-            const data = await dashboardApi.getDashboard();
-            
-            if (data && data.holdings && data.holdings.length > 0) {
+            const holdings = this.dashboardData?.holdings;
+            if (holdings && holdings.length > 0) {
                 tableBody.innerHTML = '';
-                
-                data.holdings.forEach(holding => {
+                holdings.forEach(holding => {
                     const row = document.createElement('tr');
                     row.innerHTML = `
                         <td>
@@ -505,6 +513,7 @@ const dashboardController = {
                 });
 
                 if (emptyState) emptyState.classList.add('hidden');
+                tableBody.closest('.card').classList.remove('hidden');
             } else {
                 if (emptyState) emptyState.classList.remove('hidden');
             }
@@ -534,12 +543,11 @@ const dashboardController = {
         `;
 
         try {
-            const data = await dashboardApi.getActivity();
-            
-            if (data && data.activities && data.activities.length > 0) {
+            const response = await dashboardApi.getActivity();
+            if (response.data && response.data.activities && response.data.activities.length > 0) {
                 activityList.innerHTML = '';
                 
-                data.activities.forEach(activity => {
+                response.data.activities.forEach(activity => {
                     const activityItem = document.createElement('div');
                     activityItem.className = 'activity-item';
                     activityItem.innerHTML = `
@@ -1326,4 +1334,3 @@ window.dashboardController = dashboardController;
 window.coinController = coinController;
 window.trendingController = trendingController;
 window.settingsController = settingsController; 
- 
