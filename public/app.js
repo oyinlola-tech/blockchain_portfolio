@@ -97,7 +97,7 @@ async function apiFetch(endpoint, options = {}) {
             // Unauthorized on a non-auth route - clear token and redirect to login
             localStorage.removeItem('authToken');
             authState.token = null;
-            redirectTo('login.html');
+            redirectTo('login');
             return null;
         }
 
@@ -136,7 +136,7 @@ const authApi = {
         localStorage.removeItem('userName');
         localStorage.removeItem('userEmail');
         authState.token = null;
-        redirectTo('login.html');
+        redirectTo('login');
 
         // Then, try to inform the server. We don't need to wait for it.
         await apiFetch('/auth/logout', { method: 'POST' }).catch(err => console.error('Server logout failed', err));
@@ -259,7 +259,7 @@ const loginController = {
                         localStorage.setItem('userName', data.data.user.name);
                         localStorage.setItem('userEmail', data.data.user.email);
                     }
-                    redirectTo('dashboard.html');
+                    redirectTo('dashboard');
                 } else {
                     showError('errorMessage', 'Invalid login credentials');
                 }
@@ -272,7 +272,7 @@ const loginController = {
 
         // Check if already logged in
         if (authState.token) {
-            redirectTo('dashboard.html');
+            redirectTo('dashboard');
         }
     }
 };
@@ -318,7 +318,7 @@ const signupController = {
                     if (successElement) {
                         successElement.textContent = 'Account created successfully! Redirecting...';
                         successElement.classList.remove('hidden');
-                        setTimeout(() => redirectTo('login.html'), 2000);
+                        setTimeout(() => redirectTo('login'), 2000);
                     }
                 }
             } catch (error) {
@@ -330,7 +330,7 @@ const signupController = {
 
         // Check if already logged in
         if (authState.token) {
-            redirectTo('dashboard.html');
+            redirectTo('dashboard');
         }
     }
 };
@@ -341,7 +341,7 @@ const dashboardController = {
     async init() {
         // Check authentication
         if (!authState.token) {
-            redirectTo('login.html');
+            redirectTo('login');
             return;
         }
         try {
@@ -580,7 +580,7 @@ const dashboardController = {
     },
 
     viewCoin(coinId) {
-        redirectTo(`coin.html?id=${coinId}`);
+        redirectTo(`coin?id=${coinId}`);
     }
 };
 
@@ -588,7 +588,7 @@ const coinController = {
     async init() {
         // Check authentication
         if (!authState.token) {
-            redirectTo('login.html');
+            redirectTo('login');
             return;
         }
 
@@ -596,7 +596,7 @@ const coinController = {
         const coinId = urlParams.get('id');
         
         if (!coinId) {
-            redirectTo('dashboard.html');
+            redirectTo('dashboard');
             return;
         }
 
@@ -871,7 +871,7 @@ const coinController = {
             if (data) {
                 // Close modal and redirect to dashboard
                 document.getElementById('addToPortfolioModal').classList.add('hidden');
-                redirectTo('dashboard.html');
+                redirectTo('dashboard');
             }
         } catch (error) {
             showError('addPortfolioError', handleApiError(error));
@@ -885,7 +885,7 @@ const trendingController = {
     async init() {
         // Check authentication
         if (!authState.token) {
-            redirectTo('login.html');
+            redirectTo('login');
             return;
         }
 
@@ -1106,7 +1106,7 @@ const trendingController = {
     },
 
     viewCoin(coinId) {
-        redirectTo(`coin.html?id=${coinId}`);
+        redirectTo(`coin?id=${coinId}`);
     }
 };
 
@@ -1114,7 +1114,7 @@ const settingsController = {
     async init() {
         // Check authentication
         if (!authState.token) {
-            redirectTo('login.html');
+            redirectTo('login');
             return;
         }
 
@@ -1304,17 +1304,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check current page and initialize appropriate controller
     const path = window.location.pathname;
     
-    if (path.includes('login.html')) {
+    if (path === '/' || path.includes('login')) {
         loginController.init();
-    } else if (path.includes('signup.html')) {
+    } else if (path.includes('signup')) {
         signupController.init();
-    } else if (path.includes('dashboard.html')) {
+    } else if (path.includes('dashboard')) {
         dashboardController.init();
-    } else if (path.includes('coin.html')) {
+    } else if (path.includes('coin')) {
         coinController.init();
-    } else if (path.includes('trending.html')) {
+    } else if (path.includes('trending')) {
         trendingController.init();
-    } else if (path.includes('settings.html')) {
+    } else if (path.includes('settings')) {
         settingsController.init();
     }
 
