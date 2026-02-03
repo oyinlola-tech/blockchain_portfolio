@@ -108,7 +108,7 @@ router.post('/auth/signup', async (req, res) => {
         await db.getSettings(userId);
 
         // Log activity
-        await db.logActivity(userId, 'signup', { email });
+        await db.logActivity(userId, 'signup', { email }, req.ip, req.get('User-Agent'));
 
         res.status(201).json({
             success: true,
@@ -161,7 +161,7 @@ router.post('/auth/login', async (req, res) => {
         );
 
         // Log activity
-        await db.logActivity(user.id, 'login', { ip: req.ip, userAgent: req.get('User-Agent') });
+        await db.logActivity(user.id, 'login', {}, req.ip, req.get('User-Agent'));
 
         res.json({
             success: true,
@@ -263,7 +263,62 @@ router.post('/auth/change-password', authenticateToken, async (req, res) => {
 // DASHBOARD ROUTES
 router.get('/dashboard', authenticateToken, async (req, res) => {
     try {
-        const dashboardData = await db.getDashboardData(req.user.id);
+        const userCoins = await db.getUserCoins(req.user.id);
+
+        let totalValue = 0;
+        let total24hChangeValue = 0;
+        const holdings = [];
+
+        if (userCoins.length > 0) {
+            const coinIds = userCoins.map(c => c.coin_id);
+            
+            // Fetch ticker data for all coins in the portfolio
+            const tickersResponse = await axios.get(`${DEX_PAPRIKA_API}/tickers`, {
+                params: { ids: coinIds.join(',') }
+            });
+            const tickersData = tickersResponse.data;
+            const tickersMap = new Map(tickersData.map(t => [t.id, t.quotes.USD]));
+
+            for (const coin of userCoins) {
+                const ticker = tickersMap.get(coin.coin_id);
+                const currentPrice = ticker?.price ?? 0;
+                const priceChange24h = ticker?.percent_change_24h ?? 0;
+
+                const holdingValue = parseFloat(coin.balance) * currentPrice;
+                totalValue += holdingValue;
+
+                // Calculate the value 24h ago to find the absolute change in value
+                const value24hAgo = holdingValue / (1 + (priceChange24h / 100));
+                if (isFinite(value24hAgo)) {
+                    total24hChangeValue += (holdingValue - value24hAgo);
+                }
+
+                holdings.push({
+                    id: coin.coin_id,
+                    name: coin.name,
+                    symbol: coin.symbol.toUpperCase(),
+                    icon: coin.image_url,
+                    amount: parseFloat(coin.balance),
+                    price: currentPrice,
+                    value: holdingValue,
+                    change24h: priceChange24h,
+                });
+            }
+        }
+
+        const dailyChangePercent = (totalValue > 0 && (totalValue - total24hChangeValue) > 0) 
+            ? (total24hChangeValue / (totalValue - total24hChangeValue)) * 100 
+            : 0;
+
+        const dashboardData = {
+            totalValue,
+            totalChange: dailyChangePercent, // For compatibility with frontend
+            dailyChange: total24hChangeValue,
+            dailyChangePercent: dailyChangePercent,
+            coinsCount: userCoins.length,
+            holdings: holdings.sort((a, b) => b.value - a.value)
+        };
+
         res.json({
             success: true,
             message: 'Dashboard data retrieved',
@@ -271,10 +326,16 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
         });
     } catch (error) {
         console.error('Dashboard error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to load dashboard data'
-        });
+        // Check if it's an error from the external API
+        if (error.isAxiosError) {
+            console.error('Axios error details:', {
+                message: error.message,
+                url: error.config.url,
+                status: error.response?.status,
+                data: error.response?.data
+            });
+        }
+        res.status(500).json({ success: false, message: 'Failed to load dashboard data' });
     }
 });
 

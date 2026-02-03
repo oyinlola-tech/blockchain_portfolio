@@ -120,7 +120,7 @@ class Database {
                 CREATE TABLE IF NOT EXISTS activity_logs (
                     id INT PRIMARY KEY AUTO_INCREMENT,
                     user_id INT NOT NULL,
-                    action_type ENUM('login', 'logout', 'coin_added', 'coin_removed', 'alert_set', 'alert_triggered', 'password_changed', 'settings_updated') NOT NULL,
+                    action_type ENUM('signup', 'login', 'logout', 'coin_added', 'coin_removed', 'alert_set', 'alert_triggered', 'password_changed', 'settings_updated') NOT NULL,
                     details JSON,
                     ip_address VARCHAR(45),
                     user_agent TEXT,

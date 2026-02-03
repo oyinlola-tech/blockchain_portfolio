@@ -20,7 +20,7 @@ function redirectTo(page) {
 
 function handleApiError(error) {
     console.error('API Error:', error);
-    return 'An error occurred. Please try again.';
+    return error.message || 'An error occurred. Please try again.';
 }
 
 function showError(elementId, message) {
@@ -231,6 +231,7 @@ const loginController = {
             
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
+            const rememberMe = document.getElementById('rememberMe')?.checked || false;
             const submitBtn = document.getElementById('submitBtn');
             const errorElement = document.getElementById('errorMessage');
 
@@ -243,11 +244,15 @@ const loginController = {
             hideError('errorMessage');
 
             try {
-                const data = await authApi.login({ email, password });
+                const data = await authApi.login({ email, password, rememberMe });
                 
                 if (data && data.token) {
                     localStorage.setItem('authToken', data.token);
                     authState.token = data.token;
+                    if (data.data && data.data.user) {
+                        localStorage.setItem('userName', data.data.user.name);
+                        localStorage.setItem('userEmail', data.data.user.email);
+                    }
                     redirectTo('dashboard.html');
                 } else {
                     showError('errorMessage', 'Invalid login credentials');

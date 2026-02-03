@@ -58,7 +58,7 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use('/api/', limiter);
 
 // Serve static files from public directory
-app.use(express.static(path.join(__dirname, 'public'), {
+app.use('/public', express.static(path.join(__dirname, 'public'), {
     maxAge: process.env.NODE_ENV === 'production' ? '1d' : 0
 }));
 
